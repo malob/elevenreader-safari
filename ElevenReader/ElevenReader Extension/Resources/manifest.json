@@ -1,0 +1,36 @@
+{
+   "action": {
+      "default_icon": {
+         "128": "images/icon-128.png",
+         "16": "images/icon-16.png",
+         "32": "images/icon-32.png",
+         "48": "images/icon-48.png"
+      }
+   },
+   "background": {
+      "scripts": ["background.js"],
+      "persistent": false
+   },
+   "content_scripts": [ {
+      "css": [ "assets/content.css" ],
+      "exclude_matches": [ "*://meet.google.com/*" ],
+      "js": [ "content.js" ],
+      "matches": [ "<all_urls>" ]
+   } ],
+   "description": "Read aloud any Google Doc, PDF, webpage, or book with text to speech (TTS). Natural sounding voices in 30+ languages & 130 voices.",
+   "icons": {
+      "128": "images/icon-128.png",
+      "16": "images/icon-16.png",
+      "32": "images/icon-32.png",
+      "48": "images/icon-48.png"
+   },
+   "manifest_version": 3,
+   "name": "ElevenReader — Text Reader",
+   "options_page": "options.html",
+   "permissions": [ "activeTab", "tabs", "storage", "contextMenus" ],
+   "version": "1.2.1",
+   "web_accessible_resources": [ {
+      "matches": [ "<all_urls>" ],
+      "resources": [ "images/*", "assets/*", "chunks/*", "fonts/*" ]
+   } ]
+}

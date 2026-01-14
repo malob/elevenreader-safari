@@ -1,0 +1,692 @@
+const f = (e, t) => chrome.tabs.sendMessage(e, t);
+async function P(e, t, o, n) {
+  if (!chrome.notifications || !chrome.notifications.create) {
+    console.log("Notifications not supported:", t || e);
+    return;
+  }
+  const i = {
+    type: "basic",
+    iconUrl: chrome.runtime.getURL("images/icon-32.png"),
+    title: t ? e : "ElevenReader",
+    message: t || e,
+    priority: 2,
+  };
+  if (o && n) {
+    const r = { ...i, buttons: [{ title: o }] },
+      a = await new Promise((s) => {
+        chrome.notifications.create(r, (E) => {
+          s(E);
+        });
+      }),
+      c = (s, E) => {
+        s === a &&
+          E === 0 &&
+          (n(), chrome.notifications.onButtonClicked.removeListener(c));
+      };
+    chrome.notifications.onButtonClicked.addListener(c);
+  } else await chrome.notifications.create(i);
+}
+async function l(e, t, o, n, i) {
+  const a = { action: "showNotification", title: t, description: o };
+  n && i && ((a.buttonText = n), (a.buttonUrl = i));
+  try {
+    await f(e, a);
+  } catch (c) {
+    (P(t, o, n, () => {
+      chrome.tabs.create({ url: i });
+    }),
+      console.log(
+        "Could not send notification to tab:",
+        c instanceof Error ? c.message : "Unknown error",
+      ));
+  }
+}
+async function N(e, t, o, n) {
+  const r = {
+    action: "showPageImportSuccessNotification",
+    title: t,
+    description: o,
+  };
+  n && (r.buttonUrl = n);
+  try {
+    await f(e, r);
+  } catch (a) {
+    (P(t, o, "Listen now", () => {
+      chrome.tabs.create({ url: n });
+    }),
+      console.log(
+        "Could not send notification to tab:",
+        a instanceof Error ? a.message : "Unknown error",
+      ));
+  }
+}
+async function D(e, t, o, n) {
+  try {
+    await f(e, {
+      action: "showFileImportNotification",
+      title: "Listen with ElevenReader",
+      description: t,
+      downloadId: o,
+      fileType: n,
+    });
+  } catch (i) {
+    console.log(
+      `Could not send ${n.toUpperCase()} import notification to tab:`,
+      i instanceof Error ? i.message : "Unknown error",
+    );
+  }
+}
+async function M(e, t, o) {
+  try {
+    await f(e, {
+      action: "showPageImportNotification",
+      title: "Recently added",
+      description: t,
+      readerUrl: o,
+    });
+  } catch (n) {
+    console.log(
+      "Could not send page import confirmation to tab:",
+      n instanceof Error ? n.message : "Unknown error",
+    );
+  }
+}
+async function m(e, t) {
+  try {
+    await f(e, {
+      action: "showLoadingNotification",
+      title: "Adding to ElevenReader",
+      description: t,
+    });
+  } catch (o) {
+    (P("Adding to ElevenReader", t),
+      console.log(
+        "Could not send loading notification to tab:",
+        o instanceof Error ? o.message : "Unknown error",
+      ));
+  }
+}
+const w = "https://api.elevenlabs.io/v1/reader",
+  d = "https://elevenreader.io";
+function W(e) {
+  return e ? e.startsWith(d) : !1;
+}
+function B(e) {
+  return e
+    ? e.startsWith("chrome://") ||
+        e.startsWith("chrome-extension://") ||
+        e.startsWith("edge://") ||
+        e.startsWith("about:") ||
+        e.startsWith("view-source:")
+    : !0;
+}
+let u = null,
+  h = null,
+  $ = () => {};
+async function O() {
+  if (!u) {
+    const e = await chrome.storage.local.get(["token"]);
+    e.token && (u = e.token);
+  }
+  chrome.runtime.onMessageExternal.addListener(async (e) => {
+    var t;
+    if (
+      e.type === "updateToken" &&
+      (F(e.token), u && h && ($(u), (h = null), ($ = () => {})), !u)
+    ) {
+      const o = await chrome.tabs.query({ active: !0, currentWindow: !0 });
+      (t = o[0]) != null &&
+        t.id &&
+        l(
+          o[0].id,
+          "Sign in with ElevenReader",
+          void 0,
+          "Sign in",
+          `${d}/reader/sign-in?redirect=%252Fextension`,
+        );
+    }
+  });
+}
+async function z() {
+  try {
+    const e = await chrome.tabs.create({ url: `${d}/extension`, active: !1 });
+    e.id &&
+      setTimeout(async () => {
+        try {
+          await chrome.tabs.remove(e.id);
+        } catch {}
+      }, 1e4);
+  } catch (e) {
+    console.error("Failed to trigger authorization flow:", e);
+  }
+}
+async function U() {
+  if (u) return u;
+  const stored = await chrome.storage.local.get(["token"]);
+  if (stored.token) {
+    u = stored.token;
+    return u;
+  }
+  h =
+    h ||
+    new Promise((e) => {
+      $ = e;
+    });
+  await z();
+  return h;
+}
+function F(e) {
+  ((u = e), chrome.storage.local.set({ token: e }));
+}
+async function y(e) {
+  try {
+    let t = await U(),
+      o = await e(t);
+    if (
+      (o.status === 401 &&
+        (console.log("Received 401, refreshing token and retrying"),
+        F(null),
+        (t = await U()),
+        (o = await e(t))),
+      !o.ok)
+    ) {
+      const n = await o.json();
+      throw new Error(n.detail.message);
+    }
+    return await o.json();
+  } catch (t) {
+    return (
+      console.error("API request failed:", t),
+      { error: t instanceof Error ? t.message : "Unknown error" }
+    );
+  }
+}
+async function S(e, t) {
+  return (
+    console.log("Adding file to ElevenReader:", e.name),
+    await y((n) => {
+      const i = new FormData();
+      return (
+        i.append("from_document", e),
+        t && i.append("source_url", t),
+        i.append("token", n),
+        fetch(`${w}/browser-extension/add-read`, { method: "POST", body: i })
+      );
+    })
+  );
+}
+async function j(e, t) {
+  return (
+    console.log(
+      "Adding files to ElevenReader:",
+      e.map((n) => n.name).join(", "),
+    ),
+    await y((n) => {
+      const i = new FormData();
+      return (
+        e.forEach((r) => {
+          i.append("from_documents", r);
+        }),
+        t && i.append("source_url", t),
+        i.append("token", n),
+        fetch(`${w}/browser-extension/add-read-collection`, {
+          method: "POST",
+          body: i,
+        })
+      );
+    })
+  );
+}
+async function Y() {
+  return (
+    console.log("Fetching extension configuration"),
+    await y((t) => {
+      const o = new URL(`${w}/browser-extension/config`);
+      return (
+        o.searchParams.append("token", t),
+        fetch(o.toString(), { method: "GET" })
+      );
+    })
+  );
+}
+async function V(e) {
+  return (
+    console.log("Updating extension configuration"),
+    await y((o) => {
+      const n = new URL(`${w}/browser-extension/config`);
+      return (
+        n.searchParams.append("token", o),
+        fetch(n.toString(), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(e),
+        })
+      );
+    })
+  );
+}
+async function Z(e) {
+  return (
+    console.log(`Deleting read with ID: ${e}`),
+    await y((o) => {
+      const n = new URL(`${w}/browser-extension/delete-read/${e}`);
+      return (
+        n.searchParams.append("token", o),
+        fetch(n.toString(), { method: "DELETE" })
+      );
+    })
+  );
+}
+let g = null;
+async function G() {
+  if (!g) {
+    const e = await chrome.storage.local.get(["config"]);
+    e.config && (g = e.config);
+  }
+  chrome.runtime.onMessageExternal.addListener(async (e) => {
+    e.type === "clearConfig" && R(null);
+  });
+}
+async function _() {
+  if (g) return g;
+  const e = await Y();
+  return (e && "error" in e ? R(null) : R(e), g);
+}
+function R(e) {
+  ((g = e), chrome.storage.local.set({ config: e }));
+}
+async function J(e) {
+  const t = await V(e);
+  t && "error" in t ? console.error("Failed to update config:", t.error) : R(t);
+}
+async function K(e) {
+  try {
+    const t = await _();
+    if (!t) {
+      console.error("No config available to update review prompt status");
+      return;
+    }
+    const o = { ...t, review_prompt_status: e };
+    await J(o);
+  } catch (t) {
+    console.error("Failed to update review prompt status:", t);
+  }
+}
+const b = "import_count";
+async function H() {
+  return (await chrome.storage.local.get([b]))[b] || 0;
+}
+async function Q() {
+  const t = (await H()) + 1;
+  return (await chrome.storage.local.set({ [b]: t }), t);
+}
+async function T(e) {
+  if (!e) return;
+  const t = await _();
+  (t != null && t.review_prompt_status) ||
+    (await Q()) % 20 !== 0 ||
+    setTimeout(async () => {
+      try {
+        await f(e, { action: "showReviewNotification" });
+      } catch (n) {
+        console.log(
+          "Could not send review notification to tab:",
+          n instanceof Error ? n.message : "Unknown error",
+        );
+      }
+    }, 500);
+}
+function X() {
+  chrome.runtime.onInstalled.addListener(() => {
+    (chrome.contextMenus.create({
+      id: "listen-selected-text",
+      title: "Listen with ElevenReader",
+      contexts: ["selection"],
+    }),
+      chrome.contextMenus.create({
+        id: "listen-page",
+        title: "Listen with ElevenReader",
+        contexts: ["page"],
+      }));
+  });
+}
+const v = {
+  epub: {
+    extension: ".epub",
+    mimeType: "application/epub+zip",
+    autoImportConfig: "auto_import_epub",
+  },
+  pdf: {
+    extension: ".pdf",
+    mimeType: "application/pdf",
+    autoImportConfig: "auto_import_pdf",
+  },
+  txt: {
+    extension: ".txt",
+    mimeType: "text/plain",
+    autoImportConfig: "auto_import_txt",
+  },
+};
+let k = new Map(),
+  p = new Map();
+O();
+G();
+X();
+async function I(e, t) {
+  try {
+    const o = k.get(e);
+    if (!o) throw new Error("Download information not found");
+    const n = v[o.fileType];
+    if (!n) throw new Error(`Unsupported file type: ${o.fileType}`);
+    (console.log(`Adding ${o.fileType.toUpperCase()} to reader:`, o.filename),
+      m(t, `"${o.filename}"`));
+    const i = await fetch("file://" + o.filepath);
+    if (!i.ok)
+      throw new Error(
+        `Failed to read ${o.fileType.toUpperCase()} file: ${i.status}`,
+      );
+    const r = await i.blob(),
+      a = new File([r], o.filename, { type: n.mimeType }),
+      c = await S(a);
+    if (c.read) {
+      const s = `${d}/reader/library/${c.read.read_id}`;
+      (await l(
+        t,
+        "Added to your library",
+        c.notification_description,
+        "Listen now",
+        s,
+      ),
+        T(t));
+    } else
+      await l(
+        t,
+        `Failed to import ${o.filename}`,
+        c.error || "Try again later",
+      );
+    k.delete(e);
+  } catch (o) {
+    (console.error("Failed to add file to reader:", o),
+      await l(
+        t,
+        "Update permissions to add files",
+        'Enable "Allow access to file URLs" in settings',
+        "Settings",
+        "chrome://extensions/?id=mahgnmmldchnmmdfkfcoindpgkadhhhc",
+      ));
+  }
+}
+async function A(e, t) {
+  if (!t.id) {
+    console.error("No tab ID available");
+    return;
+  }
+  try {
+    (console.log("Adding selected text to reader from:", t.url), m(t.id));
+    const n = t.title || "Selected Text" || "Selected Text",
+      i = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${n}</title>
+</head>
+<body>
+    <h1>${n}</h1>
+    <div>${e.replace(/\n/g, "<br>")}</div>
+</body>
+</html>`,
+      r = new File([i], `${n.replace(/[^a-zA-Z0-9]/g, "_")}.html`, {
+        type: "text/html",
+      }),
+      a = await S(r);
+    if (a.read) {
+      const c = `${d}/reader/library/${a.read.read_id}`;
+      (await l(
+        t.id,
+        "Added to ElevenReader",
+        a.notification_description,
+        "Listen now",
+        c,
+      ),
+        T(t.id));
+    } else
+      await l(
+        t.id,
+        "Could not add selected text to ElevenReader",
+        a.error || "Try again later",
+      );
+  } catch (o) {
+    (console.error("Failed to add selected text to reader:", o),
+      await l(
+        t.id,
+        "Could not add selected text to ElevenReader",
+        o instanceof Error ? o.message : "Try again later",
+      ));
+  }
+}
+async function L(e) {
+  if (!e.id) {
+    console.error("No tab ID available");
+    return;
+  }
+  try {
+    (console.log("Adding page to reader:", e.url),
+      e.url && p.set(e.url, void 0));
+    let t;
+    if (e.url && e.url.startsWith("file://")) {
+      console.log("Fetching local file directly:", e.url);
+      try {
+        const n = await fetch(e.url),
+          i = n.headers.get("content-type") || "",
+          r = await n.blob();
+        i.includes("application/pdf") &&
+          (t = new File([r], "page.pdf", { type: "application/pdf" }));
+      } catch {
+        await l(
+          e.id,
+          "Update permissions to add local files",
+          'Enable "Allow access to file URLs" in settings',
+          "Settings",
+          "chrome://extensions/?id=mahgnmmldchnmmdfkfcoindpgkadhhhc",
+        );
+        return;
+      }
+    }
+    if (!t) {
+      const n = await f(e.id, { action: "getPageContent" });
+      if (!(n != null && n.content))
+        throw new Error("Could not get page content");
+      if (n.contentType === "pdf") {
+        const i = atob(n.content),
+          r = new Uint8Array(i.length);
+        for (let s = 0; s < i.length; s++) r[s] = i.charCodeAt(s);
+        const a = new Blob([r], { type: "application/pdf" }),
+          c = n.filename || "document.pdf";
+        ((t = new File([a], c, { type: "application/pdf" })),
+          console.log("Processing PDF:", c));
+      } else t = new File([n.content], "page.html", { type: "text/html" });
+    }
+    const o = await S(t, e.url);
+    if (o.read) {
+      const n = `${d}/reader/library/${o.read.read_id}`;
+      (await N(e.id, "Added to ElevenReader", o.notification_description, n),
+        T(e.id),
+        e.url && p.set(e.url, o.read.read_id));
+    } else
+      (await l(
+        e.id,
+        "Could not add page to ElevenReader",
+        o.error || "Try again later",
+      ),
+        e.url && p.delete(e.url));
+  } catch (t) {
+    (console.error("Failed to add page to reader:", t),
+      await l(
+        e.id,
+        "Could not add page to ElevenReader",
+        t instanceof Error ? t.message : "Try again later",
+      ));
+  }
+}
+async function q(e) {
+  try {
+    const t = p.get(e);
+    if (!t) {
+      console.log("No read ID found for current page for deletion");
+      return;
+    }
+    console.log(`Deleting read ${t} for page: ${e}`);
+    const o = await Z(t);
+    "success" in o && o.success && p.delete(e);
+  } catch (t) {
+    console.error("Failed to delete current page read:", t);
+  }
+}
+async function ee(e) {
+  if (!e.id) {
+    console.error("No tab ID available");
+    return;
+  }
+  try {
+    (console.log("Importing stacked pages"), m(e.id));
+    const t = await f(e.id, { action: "getPageStack" });
+    if (!(t != null && t.pageStack) || t.pageStack.length === 0)
+      throw new Error("No pages in stack");
+    const o = t.pageStack;
+    console.log(`Importing ${o.length} pages as collection`);
+    const n = o.map((r, a) => {
+        const c = r.title || `Page ${a + 1}`;
+        return new File([r.html], `${c.replace(/[^a-zA-Z0-9]/g, "_")}.html`, {
+          type: "text/html",
+        });
+      }),
+      i = await j(n, o[0].url);
+    if ((await f(e.id, { action: "clearPageStack" }), i.read)) {
+      const r = `${d}/reader/library/${i.read.read_id}`;
+      (await l(
+        e.id,
+        `Added ${o.length} ${o.length === 1 ? "page" : "pages"} to ElevenReader`,
+        i.notification_description,
+        "Listen now",
+        r,
+      ),
+        T(e.id));
+    } else
+      await l(
+        e.id,
+        "Could not add stacked pages to ElevenReader",
+        i.error || "Try again later",
+      );
+  } catch (t) {
+    (console.error("Failed to import stacked pages:", t),
+      await l(
+        e.id,
+        "Could not import stacked pages",
+        t instanceof Error ? t.message : "Try again later",
+      ));
+  }
+}
+chrome.action.onClicked.addListener(async (e) => {
+  if (!e.id) {
+    console.error("No tab ID available");
+    return;
+  }
+  if (W(e.url)) {
+    chrome.tabs.update(e.id, { url: `${d}/reader/account` });
+    return;
+  }
+  if (B(e.url)) {
+    chrome.tabs.create({ url: `${d}/reader/library`, active: !0 });
+    return;
+  }
+  if (e.url && p.has(e.url)) {
+    const t = p.get(e.url),
+      o = t ? `${d}/reader/library/${t}` : void 0;
+    M(e.id, e.title, o);
+    return;
+  }
+  (m(e.id), L(e));
+});
+chrome.contextMenus.onClicked.addListener((e, t) => {
+  if (!(t != null && t.id)) {
+    console.error("No tab ID available");
+    return;
+  }
+  e.selectionText ? A(e.selectionText, t) : (m(t.id), L(t));
+});
+if (chrome.downloads && chrome.downloads.onChanged) {
+  chrome.downloads.onChanged.addListener((e) => {
+    var t;
+    ((t = e.state) == null ? void 0 : t.current) === "complete" &&
+      chrome.downloads.search({ id: e.id }, async (o) => {
+        var i;
+        const n = o[0];
+        if (n) {
+          const r = n.filename.toLowerCase(),
+            a =
+              n.filename.split("/").pop() ||
+              n.filename.split("\\").pop() ||
+              "file",
+            c = Object.keys(v).find((s) => r.endsWith(v[s].extension));
+          if (c) {
+            const s = v[c];
+            k.set(n.id, { filename: a, filepath: n.filename, fileType: c });
+            const C =
+                (i = (
+                  await chrome.tabs.query({ active: !0, currentWindow: !0 })
+                )[0]) == null
+                  ? void 0
+                  : i.id,
+              x = await _();
+            x != null && x[s.autoImportConfig]
+              ? C &&
+                (console.log(`Auto-importing ${c.toUpperCase()}:`, a),
+                await I(n.id, C))
+              : (C && (await D(C, a, n.id, c)),
+                setTimeout(
+                  () => {
+                    k.delete(n.id);
+                  },
+                  15 * 60 * 1e3,
+                ));
+          }
+        }
+      });
+  });
+}
+chrome.runtime.onMessage.addListener((e, t, o) => {
+  var n, i, r, a;
+  if (e.type === "updateToken" && e.token) {
+    console.log("Safari: Received auth token from content script");
+    F(e.token);
+    if (h) {
+      $(e.token);
+      h = null;
+      $ = () => {};
+    }
+    o({ success: true });
+    return true;
+  }
+  if (e.action === "importFile" && e.downloadId && (n = t.tab) != null && n.id)
+    I(e.downloadId, t.tab.id);
+  else if (e.action === "importSelectedText" && e.selectedText && t.tab)
+    A(e.selectedText, t.tab);
+  else if (e.action === "importCurrentPage" && t.tab) {
+    if (!t.tab.id) return;
+    (m(t.tab.id), L(t.tab));
+  } else if (e.action === "importStackedPages" && t.tab) ee(t.tab);
+  else if (e.action === "deleteCurrentPageRead" && (i = t.tab) != null && i.url)
+    q(t.tab.url);
+  else {
+    if (e.action === "getCurrentTabId")
+      return ((r = t.tab) != null && r.id && o({ tabId: t.tab.id }), !0);
+    e.action === "openTab" && e.url
+      ? (a = t.tab) != null && a.id
+        ? chrome.tabs.get(t.tab.id, (c) => {
+            chrome.tabs.create({ url: e.url, active: !0, index: c.index + 1 });
+          })
+        : chrome.tabs.create({ url: e.url, active: !0 })
+      : e.action === "updateReviewPromptStatus" && e.status && K(e.status);
+  }
+});

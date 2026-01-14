@@ -1,0 +1,40 @@
+{
+   "action": {
+      "default_icon": {
+         "128": "images/icon-128.png",
+         "16": "images/icon-16.png",
+         "32": "images/icon-32.png",
+         "48": "images/icon-48.png"
+      }
+   },
+   "background": {
+      "service_worker": "background.js"
+   },
+   "content_scripts": [ {
+      "css": [ "assets/content.css" ],
+      "exclude_matches": [ "*://meet.google.com/*" ],
+      "js": [ "content.js" ],
+      "matches": [ "\u003Call_urls>" ]
+   } ],
+   "description": "Read aloud any Google Doc, PDF, webpage, or book with text to speech (TTS). Natural sounding voices in 30+ languages & 130 voices.",
+   "externally_connectable": {
+      "matches": [ "*://elevenreader.io/*" ]
+   },
+   "icons": {
+      "128": "images/icon-128.png",
+      "16": "images/icon-16.png",
+      "32": "images/icon-32.png",
+      "48": "images/icon-48.png"
+   },
+   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAs8pGYz6eVzpNUHlfBFU4TBupHMpnwN5TAElGUmNg5J1/opeHeMy5wzPYbAdZM8CDfU7PBgGNuw2y4c7SXgt2SRqk7pkJNrHVZLqgr3GkUy2bHl9LMCrF0J6sh98eXBq3zc0Qbb3pqTnp5x3WBduSEul/Din0jYdCVjJSilY4r5oqkEQyUENfMJpFQY6vB2ZQM7i87itIGpGlpI8UTGHmiSOzk3LoIBzhrtMuzIGWRUNKCRzCGFE6UZbVMoRrhecwnFxPzgjUHHUoimnZeVbRFJrPUY0BeXugOsKmVIU6ydWbi2TjGIntMEC4XzrBv6tj2COmX9lqe+LzKHp99PqTGwIDAQAB",
+   "manifest_version": 3,
+   "name": "ElevenReader — Text Reader",
+   "options_page": "options.html",
+   "permissions": [ "activeTab", "tabs", "storage", "downloads", "notifications", "contextMenus" ],
+   "update_url": "https://clients2.google.com/service/update2/crx",
+   "version": "1.2.1",
+   "web_accessible_resources": [ {
+      "matches": [ "\u003Call_urls>" ],
+      "resources": [ "images/*", "assets/*", "chunks/*", "fonts/*" ]
+   } ]
+}
